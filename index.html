@@ -167,6 +167,28 @@
 #birth-time{text-align:center;letter-spacing:2px;}
 .in-hint{font-size:12px;margin-top:6px;line-height:1.6;color:rgba(245,240,232,.5);}
 .in-hint.ok{color:#8fd19e;} .in-hint.warn{color:#e8c46a;}
+
+/* ===== PDF保存：背景選択 ===== */
+.pdf-choice{margin-top:12px;}
+.pdf-choice-label{font-size:11px;letter-spacing:3px;color:var(--gold);text-align:center;margin-bottom:8px;}
+.pdf-choice-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.pdf-choice-row .pdf-btn{margin-top:0;letter-spacing:2px;font-family:'Noto Serif JP',serif;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 6px;}
+.pdf-chip{width:16px;height:16px;border-radius:50%;flex:none;border:1px solid var(--gold);}
+.pdf-chip.navy{background:#0d0d3b;} .pdf-chip.white{background:#fff;}
+@media print{.pdf-choice{display:none !important;}}
+
+/* ===== オフライン保存・バージョン表示・更新のお知らせ ===== */
+.dl-box{margin:22px auto 0;position:relative;z-index:1;}
+.dl-btn{width:100%;padding:13px;background:transparent;border:1px solid rgba(201,168,76,.6);border-radius:4px;color:#C9A84C;
+  font-family:'Noto Serif JP',serif;font-size:14px;letter-spacing:2px;cursor:pointer;}
+.dl-btn:disabled{opacity:.5;}
+.dl-note{font-size:11px;color:rgba(245,240,232,.45);margin-top:8px;text-align:center;line-height:1.7;}
+.dl-ver{letter-spacing:1px;}
+.update-bar{position:relative;z-index:5;max-width:480px;margin:12px auto 0;padding:12px 14px;border:1px solid #C9A84C;border-radius:4px;
+  background:rgba(201,168,76,.12);color:#F5F0E8;font-size:12.5px;line-height:1.8;text-align:center;}
+.update-bar b{color:#E8D5A3;font-weight:600;}
+.update-bar a{display:inline-block;margin-top:6px;padding:7px 16px;border:1px solid #C9A84C;border-radius:4px;color:#C9A84C;text-decoration:none;letter-spacing:1px;}
+@media print{.dl-box,.update-bar{display:none !important;}}
 </style>
 <script>/*
  MIT
@@ -524,6 +546,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     <div id="error-msg" class="error-msg"></div>
   </div>
 
+<div class="dl-box" id="dl-box"><button class="dl-btn" id="dl-btn" type="button" onclick="downloadTool()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>&nbsp;パソコンに保存（オフライン用）</button><div class="dl-note"><span id="dl-desc">ネット環境がない場所で使うときは、保存したファイルを開いてください<br></span><span class="dl-ver" id="dl-ver"></span></div></div>
+
   <div class="loading" id="loading">天体を読み解いています…</div>
 
   <div id="result">
@@ -575,7 +599,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     </div>
     <div class="note" id="result-note" style="display:none"></div>
     <div id="detail-reading"></div>
-    <button class="pdf-btn" onclick="downloadPDF()">↓ 鑑定書を印刷 ／ PDF保存</button>
+    <div class="pdf-choice"><div class="pdf-choice-label">↓ 鑑定書を印刷 ／ PDF保存（背景を選択）</div><div class="pdf-choice-row"><button class="pdf-btn" type="button" onclick="downloadPDF('navy')"><span class="pdf-chip navy"></span>ネイビー背景</button><button class="pdf-btn" type="button" onclick="downloadPDF('white')"><span class="pdf-chip white"></span>白背景</button></div></div>
     <button class="reset-btn" onclick="reset()">← 最初からやり直す</button>
   </div>
 </div>
@@ -1268,54 +1292,95 @@ function buildChart(planets, mapping, supportNum) {
   });
 
   // 外周ゴールドサークル
-  svg += `<circle cx="${cx}" cy="${cy}" r="${R+r+2}" fill="none" stroke="#C9A84C" stroke-width="1.5" opacity="0.8"/>`;
+  // ===== 天体色数図（協会の図に準拠：メタトロンキューブ入り） =====
+  // 全19円が同じ大きさ。色の面はぴったり接し、縁の線だけ重なる配置。
+  //  内側7天体：太陽＋6天体（中心から2r）
+  //  外周12星座：12・2・4・6・8・10時 → 中心から4r（太枠）
+  //              1・3・5・7・9・11時 → 内側6円に接する位置（√3×2r）
+  {
+    const C=250, CR=46, CIR=2*CR, CRE=4*CR, CRO=Math.sqrt(3)*CIR;
+    const fx=v=>v.toFixed(1);
+    const rPos=i=>{const a=(270+i*30)*Math.PI/180, d=(i%2)?CRO:CRE; return {x:C+d*Math.cos(a), y:C+d*Math.sin(a)};};
+    const iPos=i=>{const a=(270+i*60)*Math.PI/180; return {x:C+CIR*Math.cos(a), y:C+CIR*Math.sin(a)};};
+    const PORDER=['Saturn','Jupiter','Venus','Moon','Mercury','Mars'];
+    const PJA={Sun:'太陽',Moon:'月',Mercury:'水星',Venus:'金星',Mars:'火星',Jupiter:'木星',Saturn:'土星'};
+    const PPOS={}; PORDER.forEach((k,i)=>PPOS[k]=iPos(i)); PPOS.Sun={x:C,y:C};
 
-  // 内側補助線
-  const PP = PLANET_POS;
-  const lines = [
-    [PP.Saturn,PP.Mars],[PP.Saturn,PP.Jupiter],[PP.Saturn,PP.Moon],
-    [PP.Mars,PP.Mercury],[PP.Mars,PP.Venus],[PP.Mars,PP.Moon],
-    [PP.Jupiter,PP.Mercury],[PP.Jupiter,PP.Venus],[PP.Jupiter,PP.Moon],
-    [PP.Mercury,PP.Venus],[PP.Mercury,PP.Moon],[PP.Venus,PP.Moon],
-    [PP.Sun,PP.Saturn],[PP.Sun,PP.Mars],[PP.Sun,PP.Jupiter],
-    [PP.Sun,PP.Mercury],[PP.Sun,PP.Venus],[PP.Sun,PP.Moon],
-  ];
-  lines.forEach(([a,b])=>{
-    svg+=`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="rgba(201,168,76,0.18)" stroke-width="0.6"/>`;
-  });
+    // 外周のゴールドサークル
+    svg+=`<circle cx="${C}" cy="${C}" r="${CRE+CR+1}" fill="none" stroke="#C9A84C" stroke-width="0.75" opacity="0.8"/>`;
 
-  // 外周12星座（全て同じ半径r）
-  RING.forEach((s,i) => {
-    const pos = ringPos(i);
-    const mapNum = getMapNum(s.sign);
-    const isSup = mapNum === supportNum;
-    const isOutward = OUTWARD.includes(s.sign);
-    const strokeW = isOutward ? 2.5 : 1.0;
-    svg+=`<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${r}" fill="${s.hex}" stroke="rgba(255,255,255,0.85)" stroke-width="${strokeW}" opacity="0.96"/>`;
-    if(isSup){
-      svg+=`<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${r+5}" fill="none" stroke="#FFD700" stroke-width="2" stroke-dasharray="4,2"/>`;
+    // メタトロンキューブ：太陽＋内側6天体＋外周6か所（12・2・4・6・8・10時）の13点をすべて結ぶ
+    // 円のうしろに描くので、円と円のすき間からだけ線がのぞく
+    const nodes=[PPOS.Sun, ...PORDER.map(k=>PPOS[k]), ...[0,2,4,6,8,10].map(rPos)];
+    for(let i=0;i<nodes.length;i++) for(let j=i+1;j<nodes.length;j++){
+      const a=nodes[i], b=nodes[j];
+      svg+=`<line x1="${fx(a.x)}" y1="${fx(a.y)}" x2="${fx(b.x)}" y2="${fx(b.y)}" stroke="#D9B85C" stroke-width="0.75"/>`;
     }
-    if(mapNum){
-      svg+=`<text x="${pos.x.toFixed(1)}" y="${(pos.y-7).toFixed(1)}" text-anchor="middle" fill="white" font-size="15" font-weight="bold" font-family="serif">${mapNum}${isSup?'★':''}</text>`;
-    }
-    svg+=`<text x="${pos.x.toFixed(1)}" y="${(pos.y+12).toFixed(1)}" text-anchor="middle" fill="white" font-size="10" font-family="sans-serif">${s.ja}</text>`;
-  });
 
-  // 内側7天体（同じ半径r、中心は太陽）
-  Object.entries(PLANET_POS).forEach(([key,pos])=>{
-    const sign = planets[key];
-    const signInfo = RING.find(ri=>ri.sign===sign)||{hex:'#444'};
-    const mapNum = getMapNum(sign);
-    svg+=`<circle cx="${pos.x.toFixed(1)}" cy="${pos.y.toFixed(1)}" r="${r}" fill="${signInfo.hex}" stroke="rgba(255,255,255,0.8)" stroke-width="1.5" opacity="0.96"/>`;
-    svg+=`<text x="${pos.x.toFixed(1)}" y="${(pos.y-6).toFixed(1)}" text-anchor="middle" fill="white" font-size="11" font-weight="bold" font-family="sans-serif">${PLANET_JA[key]}</text>`;
-    svg+=`<text x="${pos.x.toFixed(1)}" y="${(pos.y+12).toFixed(1)}" text-anchor="middle" fill="white" font-size="12" font-family="serif">${mapNum||''}</text>`;
-  });
-
+    let cOdd='', cEven='', txt='';
+    // 外周12星座
+    RING.forEach((s,i)=>{
+      const p=rPos(i), num=getMapNum(s.sign), sup=num===supportNum, thick=(i%2===0);
+      const c=`<circle cx="${fx(p.x)}" cy="${fx(p.y)}" r="${CR}" fill="${s.hex}" stroke="rgba(255,255,255,0.9)" stroke-width="${thick?2:1}"/>`;
+      if(thick) cEven+=c; else cOdd+=c;
+      if(sup) cEven+=`<circle cx="${fx(p.x)}" cy="${fx(p.y)}" r="${CR+5}" fill="none" stroke="#FFD700" stroke-width="2" stroke-dasharray="4,2"/>`;
+      if(num) txt+=`<text x="${fx(p.x)}" y="${fx(p.y-7)}" text-anchor="middle" fill="white" font-size="15" font-weight="bold" font-family="serif">${num}${sup?'★':''}</text>`;
+      txt+=`<text x="${fx(p.x)}" y="${fx(p.y+12)}" text-anchor="middle" fill="white" font-size="10" font-family="sans-serif">${s.ja}</text>`;
+    });
+    // 内側7天体（その人の星座の色）
+    Object.entries(PPOS).forEach(([k,p])=>{
+      const si=RING.find(x=>x.sign===planets[k])||{hex:'#444'};
+      cEven+=`<circle cx="${fx(p.x)}" cy="${fx(p.y)}" r="${CR}" fill="${si.hex}" stroke="rgba(255,255,255,0.8)" stroke-width="1.5"/>`;
+      txt+=`<text x="${fx(p.x)}" y="${fx(p.y-6)}" text-anchor="middle" fill="white" font-size="11" font-weight="bold" font-family="sans-serif">${PJA[k]}</text>`;
+      txt+=`<text x="${fx(p.x)}" y="${fx(p.y+12)}" text-anchor="middle" fill="white" font-size="12" font-family="serif">${getMapNum(planets[k])||''}</text>`;
+    });
+    svg+=cOdd+cEven+txt;
+  }
   svg+=`</svg>`;
   return svg;
 }
 
-function downloadPDF(){
+
+// ===== 白背景PDF用：天体色数図をインク節約の白背景版に変換 =====
+var PRINT_GOLD = '#9C7A2C';
+function whitenChartSvg(html){
+  var box = document.createElement('div'); box.innerHTML = html;
+  var svg = box.querySelector('svg'); if(!svg) return html;
+  var norm = function(v){ return (v||'').toLowerCase().replace(/\s/g,''); };
+  var isWhite = function(v){ v = norm(v); return v==='white'||v==='#fff'||v==='#ffffff'||v.indexOf('rgba(255,255,255')===0; };
+  svg.querySelectorAll('rect').forEach(function(r){ r.setAttribute('fill','#FFFFFF'); });
+  svg.querySelectorAll('circle').forEach(function(c){
+    var st = norm(c.getAttribute('stroke'));
+    if(!st && isWhite(c.getAttribute('fill'))){ c.parentNode.removeChild(c); return; } // 背景の星
+    if(st==='#c9a84c'){ c.setAttribute('stroke',PRINT_GOLD); c.setAttribute('stroke-width','0.75'); c.setAttribute('opacity','1'); return; }
+    if(st==='#ffd700'){ c.setAttribute('stroke','#C08A00'); c.setAttribute('stroke-width','2.8'); return; }
+    if(isWhite(st)){
+      var w = parseFloat(c.getAttribute('stroke-width')||'1');
+      c.setAttribute('stroke',PRINT_GOLD); c.setAttribute('stroke-width', String(+(w>=2 ? w : w+0.3).toFixed(1)));
+      c.setAttribute('opacity','1');
+    }
+  });
+  svg.querySelectorAll('line').forEach(function(l){ l.setAttribute('stroke',PRINT_GOLD); l.setAttribute('stroke-width','0.75'); });
+  return box.innerHTML;
+}
+
+function whitenPanelHtml(s){
+  if(s.indexOf('<svg')>-1) s = whitenChartSvg(s);
+  return s
+    .replace(/background:linear-gradient\(135deg,#1a1a5e 0%,#0d0d3b 50%,#05050f 100%\);/g,'background:#FFFFFF;border:1.5px solid #B8933A;')
+    .replace(/background:rgba\(13,13,42,0\.85\)/g,'background:#FFFFFF')
+    .replace(/border:1px solid #C9A84C/g,'border:1.5px solid '+PRINT_GOLD)
+    .replace(/border:1px solid rgba\(201,168,76,0\.5\)/g,'border:1px solid rgba(0,0,0,0.18)')
+    .replace(/font-weight:300;(font-style:italic;)?color:#C9A84C/g,'font-weight:400;$1color:#8B6914')
+    .replace(/color:#C9A84C/g,'color:#8B6914;font-weight:600')
+    .replace(/color:rgba\(201,168,76,0\.8\)/g,'color:#8B6914;font-weight:600')
+    .replace(/color:#F5F0E8/g,'color:#1a1a1a;font-weight:600')
+    .replace(/color:rgba\(245,240,232,0\.5\)/g,'color:#555')
+    .replace(/font-size:8px/g,'font-size:9px');
+}
+
+function downloadPDF(theme){
+  theme = theme==='white' ? 'white' : 'navy';
   const name = document.getElementById('clientname').value || 'ご依頼者';
   const targetYear = parseInt(document.getElementById('target-year').value);
   const chartSvg = document.getElementById('celestial-chart').innerHTML;
@@ -1389,7 +1454,7 @@ function downloadPDF(){
   const parts = [];
   parts.push('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">');
   parts.push('<title>天体色数鑑定書 ' + name + '</title>');
-  parts.push('<style>' + css + '</style></head><body>');
+  parts.push('<style>' + css + (theme==='white' ? '\n' + ['body .title-en,body .section-title,body .planet-num-badge,body .summary-label,body .month-num,body .month-badge,body .birth-data-label,body .reading-title,body .reading-subsec-title,body .month-direction.outward,body .reading-body strong{font-weight:600}','body .unmei-num{font-weight:400}','body .divider{height:1.5px}','body .section-title{border-bottom:1.5px solid #d9c9a0}','body .summary-card,body .birth-data-box,body .reading-section{border-width:1.5px}','body .reading-subsection{border-left-width:3px}'].join('\n') : '') + '</style></head><body>');
 
   // ── 表紙（背景画像＋テキストSVG） ──
   (function(){
@@ -1447,12 +1512,16 @@ function downloadPDF(){
     +'<div style="font-size:9px;letter-spacing:3px;color:rgba(201,168,76,0.8);margin-bottom:4px;">運命数（誕生数）</div>'
     +'<div style="font-family:Georgia,serif;font-size:64px;font-weight:300;font-style:italic;color:#C9A84C;line-height:1;">'+unmei+'</div>'
     +'</div>';
+  const _panelStart = parts.length;
   parts.push('<div style="background:linear-gradient(135deg,#1a1a5e 0%,#0d0d3b 50%,#05050f 100%);border-radius:4px;padding:20px;margin:10px 0;position:relative;">');
   // バッジ付きレイアウト（星空背景の中）
   parts.push('<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">'+maleBadge+unmeiCenter+femaleBadge+'</div>');
   parts.push('<div style="text-align:center;">' + chartSvg + '</div>');
   parts.push('<div style="display:flex;justify-content:center;margin-top:10px;">'+totalBadge+'</div>');
   parts.push('</div>');
+  if(theme==='white'){ for(var _i=_panelStart;_i<parts.length;_i++) parts[_i]=whitenPanelHtml(parts[_i]); }
+  // ネイビー版：天体色数図の四角い背景をなくし、ネイビーの枠とひと続きに
+  else { for(var _j=_panelStart;_j<parts.length;_j++) parts[_j]=parts[_j].replace(/<rect([^>]*?)fill="(url\(#bgGrad\)|#0D0D1A)"/g,'<rect$1fill="none"'); }
   // ── page2: 各天体の色数 + 男性・女性・統合・サポート色数 ──
   var supportInfo = window._snsSupportInfo || {};
   var maleInfo    = window._snsMaleInfo   || {};
@@ -2540,6 +2609,57 @@ geocode=function(place){
     return _auto();
   };
 })();
+</script>
+
+<script>
+// ===== バージョン管理（ツールを改定したら TOOL_VERSION を上げる） =====
+var TOOL_VERSION = '2026.10';
+var TOOL_SOURCE_URL = '';/*@@SRC@@*/   // ← パソコンに保存した時に、元のURLが自動で書き込まれる
+var TOOL_FILE_NAME = '鑑定書ツール_ノーマル版.html';
+(function(){
+  var isFile = location.protocol === 'file:';
+  var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  var ver = document.getElementById('dl-ver');
+  if(ver) ver.textContent = 'ver. ' + TOOL_VERSION + (isFile ? '（保存版）' : '');
+  // 保存版・スマホではダウンロードボタンを出さない（バージョン表示だけ残す）
+  if(isFile || isMobile){
+    var b = document.getElementById('dl-btn'); if(b) b.style.display = 'none';
+    var d = document.getElementById('dl-desc'); if(d) d.style.display = 'none';
+  }
+  // 保存版をネットにつながった状態で開いたら、最新版があるか確認
+  if(isFile && TOOL_SOURCE_URL && window.fetch){
+    fetch(TOOL_SOURCE_URL, {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(t){
+      var m = t.match(/var TOOL_VERSION = '([^']+)'/);
+      if(m && newerVersion(m[1], TOOL_VERSION)) showUpdateBar(m[1]);
+    }).catch(function(){ /* オフライン時は何もしない */ });
+  }
+})();
+function newerVersion(a, b){
+  var x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for(var i=0;i<Math.max(x.length,y.length);i++){ var p=x[i]||0, q=y[i]||0; if(p!==q) return p>q; }
+  return false;
+}
+function showUpdateBar(v){
+  var bar = document.createElement('div'); bar.className = 'update-bar';
+  bar.innerHTML = '新しいバージョン <b>ver. ' + v + '</b> が公開されています。<br>このファイルは ver. ' + TOOL_VERSION + ' です。最新版を開いて、保存し直してください。<br>'
+    + '<a href="' + TOOL_SOURCE_URL + '" target="_blank" rel="noopener">最新版を開く</a>';
+  document.body.insertBefore(bar, document.body.firstChild);
+}
+function downloadTool(){
+  var btn = document.getElementById('dl-btn'); btn.disabled = true;
+  var src = location.href.split('#')[0].split('?')[0];
+  var mark = '@@' + 'SRC@@';
+  fetch(src, {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+    // 保存したファイルに「元のURL」を書き込む（更新のお知らせ用）
+    t = t.replace("var TOOL_SOURCE_URL = '';/*" + mark + "*/", "var TOOL_SOURCE_URL = '" + src.replace(/'/g,"%27") + "';/*" + mark + "*/");
+    var blob = new Blob([t], {type:'text/html;charset=utf-8'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = TOOL_FILE_NAME;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+  }).catch(function(){
+    alert('保存できませんでした。ネットにつながっているか確認して、もう一度お試しください。');
+  }).then(function(){ btn.disabled = false; });
+}
 </script>
 </body>
 </html>
